@@ -1,18 +1,16 @@
 <div align='center'>
-    <h1>
-       Robust Few-Shot Vision-Language Model Adaptation 
-    </h1>
-   	<a href="https://hannawang09.github.io/" target="_blank">Hanxin Wang</a><sup>1,†</sup>,
-    <a href="https://tian1327.github.io/" target="_blank">Tian Liu</a><sup>2,†</sup>,
-    <a href="https://aimerykong.github.io/" target="_blank">Shu Kong</a><sup>1,3,*</sup>
-    <br>
-    <div>
-        <span><sup>1</sup>University of Macau,</span>
-        <span><sup>2</sup>Texas A&M University,</span>
-        <span><sup>3</sup>Institute of Collaborative Innovation</span>
-    </div>
-    <a href="https://arxiv.org/abs/2506.04713"><img src='https://img.shields.io/badge/arXiv-SRAPF-red' alt='Paper PDF'></a>
-	<a href="https://hannawang09.github.io/projects/srapf/"><img src='https://img.shields.io/badge/Project_Page-SRAPF-green' alt='Project Page'></a>
+<h1>Robust Few-Shot Vision-Language Model Adaptation </h1>
+	
+<a href="https://hannawang09.github.io/" target="_blank">Hanxin Wang</a><sup>1,†</sup>,
+<a href="https://tian1327.github.io/" target="_blank">Tian Liu</a><sup>2,†</sup>,
+<a href="https://aimerykong.github.io/" target="_blank">Shu Kong</a><sup>1,3,*</sup>
+
+<span><sup>1</sup>University of Macau,</span>
+<span><sup>2</sup>Texas A&M University,</span>
+<span><sup>3</sup>Institute of Collaborative Innovation</span>
+	
+<a href="https://arxiv.org/abs/2506.04713"><img src='https://img.shields.io/badge/arXiv-SRAPF-red' alt='Paper PDF'></a>
+<a href="https://hannawang09.github.io/projects/srapf/"><img src='https://img.shields.io/badge/Project_Page-SRAPF-green' alt='Project Page'></a>
 </div>
 
 
@@ -22,7 +20,7 @@ Pretrained Vision-Language Models (VLMs) achieve strong performance on downstrea
 We propose **SRAPF**, **S**tage-wise **R**etrieval **A**ugmentation-based **A**dversarial **P**artial **F**inetuning, a robust few-shot VLM adaptation method. It consists of two finetuning stages: (1) partial finetuning of the visual encoder using both ID and retrieved data, followed by (2) adversarial partial finetuning using few-shot ID data. 
 
 <div align='center'>
-    <img src='asset/overview.jpg' alt='overview' style="zoom:50%;">
+    <img src='asset/overview.jpg' alt='overview' width=50%>
 </div>
 
 ## Environment Configuration
@@ -59,7 +57,7 @@ We provide demos of model training and evaluation.
 
 ## Performance
 <div align='center'>
-    <img src='asset/performance.png' alt='performance' style="zoom:50%;">
+    <img src='asset/performance.png' alt='performance' width=50%>
 </div>
 
 
