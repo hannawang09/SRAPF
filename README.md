@@ -8,7 +8,9 @@
 <span><sup>1</sup>University of Macau,</span>
 <span><sup>2</sup>Texas A&M University,</span>
 <span><sup>3</sup>Institute of Collaborative Innovation</span>
-	
+
+ <sup>†</sup>Equal contribution, <sup>*</sup>Corresponding author
+ 
 <a href="https://arxiv.org/abs/2506.04713"><img src='https://img.shields.io/badge/arXiv-SRAPF-red' alt='Paper PDF'></a>
 <a href="https://hannawang09.github.io/projects/srapf/"><img src='https://img.shields.io/badge/Project_Page-SRAPF-green' alt='Project Page'></a>
 </div>
