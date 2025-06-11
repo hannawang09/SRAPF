@@ -35,7 +35,7 @@ Datasets list:
 
 ### ImageNet
 - Create a folder named `ImageNet-1k/` under `$ImageNet`.
-- Download `split_ImageNet.json` to this folder from [this link]("https://drive.google.com/file/d/1SvPIN6iV6NP2Oulj19a869rBXrB5SNFo/view").
+- Download `split_ImageNet.json` to this folder from [this link](https://drive.google.com/file/d/1JZlLc0qKXhYwDCe6-GytBJXuKUNTofL8/view?usp=sharing).
 - Create `images/` under `ImageNet-1k/`.
 - Download training  and validation sets, and then decompress to `ImageNet-1k/images/`.
 

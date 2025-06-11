@@ -587,6 +587,52 @@ def build_imagenet_few_shot_dataset(dataset_name,
     return few_shot_dataset, openai_imagenet_classes
 
 
+def build_imagenet_few_shot_dataset_demo(dataset_name,
+                                         split,
+                                         seed,
+                                         preprocess,
+                                         root,
+                                         num_shots,
+                                         w_retrival = False,
+                                         few_shot_dir='data_resource'):
+    assert dataset_name in imagenet_DATASETS
+
+    few_shot_index_file = os.path.join(
+        few_shot_dir, dataset_name, f"fewshot{num_shots}_seed{seed}.txt")
+
+    dataset = imagenet_DATASETS[dataset_name](root)
+    if dataset_name in ['imagenet_a', 'imagenet_r']:
+        label_map = dataset.label_map
+    else:
+        label_map = list(range(1000))
+
+    print(f"Loading few-shot data from {few_shot_index_file}.")
+
+    lines = []
+    with open(few_shot_index_file, 'r') as f:
+        line = f.readlines()
+        line = [os.path.join(root, dataset.dataset_name, l) for l in line]
+        lines.extend(line)
+
+    if w_retrival:
+        retrival_index_file = os.path.join(few_shot_dir, f"T2T500.txt")
+        print(f"Loading retrieved data from {retrival_index_file}.")
+        retrieved_root  = root.replace("ImageNet", "retrieved")
+        with open(os.path.join(retrival_index_file), 'r') as f:
+            line = f.readlines()
+            line = [os.path.join(retrieved_root, l) for l in line]
+            lines.extend(line)
+
+    few_shot_dataset = []
+    for line in lines:
+        impath, label, is_fewshot = line.strip('\n').split(' ')
+        few_shot_dataset.append({'impath': impath, 'label': int(label), 'is_fewshot': int(is_fewshot)})
+
+    few_shot_dataset = DatasetWrapper(few_shot_dataset, label_map, transform=preprocess,
+                                      dataset_name=dataset.dataset_name)
+    return few_shot_dataset, openai_imagenet_classes
+
+
 def build_imagenet_dataset(dataset_name, split, preprocess, root):
     assert dataset_name in imagenet_DATASETS
 
