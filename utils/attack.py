@@ -642,3 +642,49 @@ class PGD(Attack):
             adv_features = (adv_features + delta).detach()
 
         return torch.concat([adv_features, tokens], dim=0)
+
+    def forward_token(self, images, token, labels):
+
+        features = token + torch.zeros(images.shape[0], 1, 768).cuda()  # (B, 1, 768)
+        features = features.clone().detach().to(self.device)
+        labels = labels.clone().detach().to(self.device)
+
+        if self.targeted:
+            target_labels = self.get_target_label(features, labels)
+
+        loss = nn.CrossEntropyLoss()
+        adv_features = features.clone().detach()
+
+        if self.random_start:
+            # Starting at a uniformly random point
+            adv_features = adv_features + torch.empty_like(adv_features).uniform_(
+                -self.eps, self.eps
+            )
+            # adv_features = torch.clamp(adv_features, min=-1, max=1).detach()
+            adv_features = adv_features.detach()
+
+        for _ in range(self.steps):
+            adv_features.requires_grad = True
+
+            image_features = self.model.encode_clstoken(images, adv_features)
+            image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+
+            logits = self.classifier(image_features)
+
+            # Calculate loss
+            if self.targeted:
+                cost = -loss(logits, labels)
+            else:
+                cost = loss(logits, labels)
+
+            # Update adversarial features
+            grad = torch.autograd.grad(
+                cost, adv_features, retain_graph=False, create_graph=False
+            )[0]
+
+            adv_features = adv_features.detach() + self.alpha * grad.sign()
+            delta = torch.clamp(adv_features - features, min=-self.eps, max=self.eps)
+            # adv_features = torch.clamp(adv_features + delta, min=-1, max=1).detach()
+            adv_features = (adv_features + delta).detach()
+
+        return adv_features

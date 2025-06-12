@@ -279,6 +279,25 @@ class VisualTransformer(nn.Module):
 
         return x
 
+    def forward_token(self, x: torch.Tensor, cls_token: torch.Tensor):
+        x = self.conv1(x)  # shape = [*, width, grid, grid]
+        x = x.reshape(x.shape[0], x.shape[1], -1)  # shape = [*, width, grid ** 2]
+        x = x.permute(0, 2, 1)  # shape = [*, grid ** 2, width]
+        x = torch.cat([cls_token.to(x.dtype), x], dim=1)  # shape = [*, grid ** 2 + 1, width]
+        x = x + self.positional_embedding.to(x.dtype)
+        x = self.ln_pre(x)
+
+        x = x.permute(1, 0, 2)  # NLD -> LND
+        x = self.transformer(x)
+        x = x.permute(1, 0, 2)  # LND -> NLD
+
+        x = self.ln_post(x[:, 0, :])
+
+        if self.proj is not None:
+            x = x @ self.proj
+
+        return x
+
 
 class CLIP(nn.Module):
     def __init__(self,
@@ -414,6 +433,9 @@ class CLIP(nn.Module):
 
     def get_features(self, midfeatures, k=2):
         return self.visual.restblocks_forward(midfeatures, k=k)
+
+    def encode_clstoken(self, image, cls_token):
+        return self.visual.forward_token(image.type(self.dtype), cls_token=cls_token)
 
 
 def convert_weights(model: nn.Module):

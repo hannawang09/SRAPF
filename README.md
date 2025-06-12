@@ -45,6 +45,23 @@ Please follow the instructions in [DATASET.md](DATASETS.md) to prepare the datas
 
 
 
+
+## Training
+1. Update your data path and retrieved data path in `config.yml`.
+2. Runing script using the following command:
+```
+# bash scripts/run_dataset_seed_*.sh [dataset] [data_seed] [ft_top_X_block]
+# In our experiments, we adopt PFT on the top-4 blocks as the default setting.
+
+bash scripts/run_dataset_seed_SRAPF.sh imagenet 1 4
+
+```
+We also provide the scripts for **Partial Finetuning** (`run_dataset_seed_PFT.sh`) and **Partial Finetuning with Adversarial Perturbation** (`run_dataset_seed_PFT_w_AP.sh`).
+
+
+
+
+
 ## Demo
 
 We provide demos of model training and evaluation. 
@@ -62,13 +79,6 @@ We provide demos of model training and evaluation.
     <img src='asset/performance.png' alt='performance' width=50%>
 </div>
 
-
-
-
-
-## Todo
-
-- [ ] add scripts
 
 
 

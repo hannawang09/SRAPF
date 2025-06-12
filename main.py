@@ -68,7 +68,7 @@ def run_stage1_finetuning(args, logger, model, classifier, train_preprocess, tes
         zs_test_acc = run_zeroshot(args, val_dataloader, model, logger, classifier)
 
     if args.method == 'zeroshot':
-        result_summary = f'{args.dataset},{stage1_method},{args.data_source},{args.cls_init},{args.num_shots},{args.data_seed},{round(zs_test_acc,1)}'
+        result_summary = f'{args.dataset},{stage1_method},{args.data_source},{args.cls_init},{args.num_shots},{args.data_seed},{round(zs_test_acc,3)}'
         logger.info(f'{result_summary}')
         exit()
 
@@ -78,10 +78,10 @@ def run_stage1_finetuning(args, logger, model, classifier, train_preprocess, tes
 
     #---------- Training
     if args.method == 'finetune':
-        if args.add_adverb_stage1:
+        if args.add_ap_stage1:
             best_model, best_head, \
-                best_records, best_logit_scale = train_ce_ap(args, logger, loss_logger, model, classifier, 
-                                                                 train_dataloader, val_dataloader, eps=args.eps_stage1)
+                best_records, best_logit_scale = train_ce_ap(args, logger, loss_logger, model, classifier,
+                                                             train_dataloader, val_dataloader, eps=args.eps_stage1)
         else:
             best_model, best_head, \
                 best_records, best_logit_scale = train_ce(args, logger, loss_logger, model, classifier, 
@@ -96,7 +96,7 @@ def run_stage1_finetuning(args, logger, model, classifier, train_preprocess, tes
     logger.info(f"best_logit_scale: {round(best_logit_scale.item(), 8)}")
 
     # test the best model after finetuning
-    test_acc = test(data_loader=test_dataloader, model=best_model, classifier=best_head, 
+    test_acc = test(dataloader=test_dataloader, model=best_model, classifier=best_head, 
                     test_label_map=[i for i in range(1000)], device=args.device)
     logger.info(f"+++++ Stage 1 Finetuning Test Acc: {round(test_acc, 3)}")
 
@@ -116,13 +116,13 @@ def run_stage2_FSFT(model, classifier, stage1_best_model_path, train_preprocess)
 
     # reset the flag
     args.epochs = 10
-    args.data_source == 'fewshot'
+    args.data_source = 'fewshot'
     args.model_path = stage1_best_model_path
 
     logger.info(f"Run stage 2 few-shot finetuning ......")
 
     # set the dataloaders
-    imagenet_train, _ = datasets.build_imagenet_few_shot_dataset('imagenet', 'train', args.data_seed, train_preprocess, 
+    imagenet_train, _ = datasets.build_imagenet_few_shot_dataset('imagenet', args, args.data_seed, train_preprocess, 
                                                                  root=args.root, num_shots=args.num_shots, 
                                                                  w_retrival=True if args.data_source == 'fewshot+retrieved' else False)
     train_dataloader = torch.utils.data.DataLoader(
@@ -164,17 +164,17 @@ def run_stage2_FSFT(model, classifier, stage1_best_model_path, train_preprocess)
     args.scheduler = scheduler
 
     #---------- Training
-    if args.add_adverb_stage2:
+    if args.add_ap_stage2:
         best_model, best_head, \
-            best_records, best_logit_scale = train_ce_ap(args, logger, loss_logger, model, classifier, 
-                                                                train_dataloader, val_dataloader, eps=args.eps_stage2)
+            best_records, best_logit_scale = train_ce_ap(args, logger, loss_logger, model, classifier,
+                                                         train_dataloader, val_dataloader, eps=args.eps_stage2)
     else:
         best_model, best_head, \
-            best_records, best_logit_scale = train_ce(args, logger, loss_logger, model, classifier, 
-                                                        train_dataloader, val_dataloader)
+            best_records, best_logit_scale = train_ce(args, logger, loss_logger, model, classifier,
+                                                      train_dataloader, val_dataloader)
 
     # test the best model after FSFT
-    test_acc = test(data_loader=test_dataloader, model=best_model, classifier=best_head, 
+    test_acc = test(dataloader=test_dataloader, model=best_model, classifier=best_head, 
                     test_label_map=[i for i in range(1000)], device=args.device)
     logger.info(f"+++++ Stage 2 FSFT Test Acc: {round(test_acc, 3)}")
 
@@ -217,15 +217,16 @@ if __name__ == '__main__':
     num_features = 512
     logit_scale = model.logit_scale
 
-    if args.template == 'openai':
+    if args.cls_init == 'openai':
         with torch.no_grad():
-            logger.info(f"Getting zeroshot weights from {args.template}.")
-            zeroshot_weights = get_zeroshot_weights(text_name, args.template, model, tokenizer, logit_scale)
+            template = 'openai_imagenet_template'
+            logger.info(f"Getting zeroshot weights from {args.cls_init}.")
+            zeroshot_weights = get_zeroshot_weights(text_name, template, model, tokenizer, logit_scale)
         logger.info(f"Initialize classifier head with text embedding. weights.shape: {zeroshot_weights.shape}")
         classifier = MyLinear(input_dim=num_features, num_classes=num_classes, bias=False)
         classifier._init_weights(zeroshot_weights)
 
-    elif args.template == 'random':
+    elif args.cls_init == 'random':
         logger.info(f'Initialized classifier head with random weights.')
         classifier = MyLinear(input_dim=num_features, num_classes=num_classes, bias=False)
 
@@ -256,7 +257,7 @@ if __name__ == '__main__':
 
 
     result_summary = f'{args.dataset},{stage1_method},{args.data_source},{args.cls_init},'\
-                     f'{args.num_shots},{args.data_seed},{round(stage1_acc,1)},'\
-                     f'{round(stage2_fsft_acc,1)}'
+                     f'{args.num_shots},{args.data_seed},{round(stage1_acc,3)},'\
+                     f'{round(stage2_fsft_acc,3)}'
     logger.info(f'{result_summary}')
     print(f'{result_summary}')

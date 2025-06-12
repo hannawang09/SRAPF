@@ -571,10 +571,10 @@ def build_imagenet_few_shot_dataset(dataset_name,
     if w_retrival:
         retrival_index_file = os.path.join(few_shot_dir, f"T2T500.txt")
         args.logger.info(f"Loading retrieved data from {retrival_index_file}.")
-        retrival_root = args.retrival_root
+        retrieved_root= args.retrieved_root
         with open(os.path.join(retrival_index_file), 'r') as f:
             line = f.readlines()
-            line = [os.path.join(retrival_root, l) for l in line]
+            line = [os.path.join(retrieved_root, l) for l in line]
             lines.extend(line)
 
     few_shot_dataset = []
