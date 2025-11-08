@@ -638,8 +638,7 @@ class PGD(Attack):
 
             adv_features = adv_features.detach() + self.alpha * grad.sign()
             delta = torch.clamp(adv_features - features, min=-self.eps, max=self.eps)
-            # adv_features = torch.clamp(adv_features + delta, min=-1, max=1).detach()
-            adv_features = (adv_features + delta).detach()
+            adv_features = (features + delta).detach()
 
         return torch.concat([adv_features, tokens], dim=0)
 
@@ -684,7 +683,6 @@ class PGD(Attack):
 
             adv_features = adv_features.detach() + self.alpha * grad.sign()
             delta = torch.clamp(adv_features - features, min=-self.eps, max=self.eps)
-            # adv_features = torch.clamp(adv_features + delta, min=-1, max=1).detach()
-            adv_features = (adv_features + delta).detach()
+            adv_features = (features + delta).detach()
 
         return adv_features

@@ -72,9 +72,9 @@ def train_ce(args, logger, loss_logger, model, classifier, train_dataloader, val
             labels = labels.to(args.device)
 
             image_features = model.encode_image(images)
-            image_feature = image_features / image_features.norm(dim=-1, keepdim=True)
+            image_features = image_features / image_features.norm(dim=-1, keepdim=True)
 
-            logits = classifier(image_feature)
+            logits = classifier(image_features)
             logits = logits * logit_scale.exp()
 
             total_loss = loss(logits, labels)

@@ -74,7 +74,7 @@ def run_stage1_finetuning(args, logger, model, classifier, train_preprocess, tes
 
     if args.skip_stage1:
         logger.info(f"Skip stage 1 finetuning.")
-        return -1, None, test_loader_copy
+        return -1, None
 
     #---------- Training
     if args.method == 'finetune':

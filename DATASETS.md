@@ -53,10 +53,6 @@ ImageNet-1k/
 |-- split_ImageNet.json
 |–– images/
 |   |–– train/
-|   |   |-- n01440764
-|   |   |-- n01443537
-|   |   |-- ...
-|   |   |-- n15075141
 |   |–– val/
 ```
 
