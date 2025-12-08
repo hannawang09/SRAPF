@@ -1,3 +1,4 @@
+# code adapted from [torchattacks](https://github.com/Harry24k/adversarial-attacks-pytorch)
 import time
 from collections import OrderedDict
 
@@ -592,15 +593,22 @@ class PGD(Attack):
         self.random_start = random_start
         self.supported_mode = ["default", "targeted"]
 
-    def forward(self, features, labels, k=2):
+    def forward(self, features, labels, k=2, is_encoder=True):
         """
         Override
         """
 
-        features = features.clone().detach().to(self.device) # (197, B, 768)
-        # Note that we only add perturbation to cls token !
-        tokens = features[1:, :, :] # patch tokens (196, B, 768)
-        features = features[0, :, :].unsqueeze(0) # cls token (1, B, 768)
+        if is_encoder:
+            features = features.clone().detach().to(self.device) # (197, B, 768)
+            # Note that we only add perturbation to cls token !
+            tokens = features[1:, :, :] # patch tokens (196, B, 768)
+            features = features[0, :, :].unsqueeze(0) # cls token (1, B, 768)
+        else:
+            features = features.clone().detach().to(self.device) # (B, 197, 768)
+            # Note that we only add perturbation to cls token !
+            tokens = features[:, 1:, :] # patch tokens (B, 196, 768)
+            features = features[:, 0, :].unsqueeze(1) # cls token (B, 1, 768)
+
         labels = labels.clone().detach().to(self.device)
 
         if self.targeted:
@@ -620,8 +628,11 @@ class PGD(Attack):
         for _ in range(self.steps):
             adv_features.requires_grad = True
 
-            image_features = self.model.get_features(torch.concat([adv_features, tokens], dim=0), k=k)
-            image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+            if is_encoder:
+                image_features = self.model.get_features(torch.concat([adv_features, tokens], dim=0), k=k)
+                image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+            else:
+                image_features = self.model.get_features(torch.concat([adv_features, tokens], dim=1), k=k)
 
             logits = self.classifier(image_features)
 
@@ -638,13 +649,17 @@ class PGD(Attack):
 
             adv_features = adv_features.detach() + self.alpha * grad.sign()
             delta = torch.clamp(adv_features - features, min=-self.eps, max=self.eps)
+            # adv_features = torch.clamp(features + delta, min=-1, max=1).detach()
             adv_features = (features + delta).detach()
 
-        return torch.concat([adv_features, tokens], dim=0)
+        if is_encoder:
+            return torch.concat([adv_features, tokens], dim=0)
+        else:
+            return torch.concat([adv_features, tokens], dim=1)
 
-    def forward_token(self, images, token, labels):
+    def forward_token(self, images, token, labels, is_encoder=True):
 
-        features = token + torch.zeros(images.shape[0], 1, 768).cuda()  # (B, 1, 768)
+        features = token + torch.zeros(images.shape[0], 1, 768).cuda()  # (1, 1, 768) --> (B, 1, 768)
         features = features.clone().detach().to(self.device)
         labels = labels.clone().detach().to(self.device)
 
@@ -665,8 +680,11 @@ class PGD(Attack):
         for _ in range(self.steps):
             adv_features.requires_grad = True
 
-            image_features = self.model.encode_clstoken(images, adv_features)
-            image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+            if is_encoder:
+                image_features = self.model.encode_clstoken(images, adv_features)
+                image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+            else:
+                image_features = self.model.encode_clstoken(images, adv_features)
 
             logits = self.classifier(image_features)
 
@@ -683,6 +701,7 @@ class PGD(Attack):
 
             adv_features = adv_features.detach() + self.alpha * grad.sign()
             delta = torch.clamp(adv_features - features, min=-self.eps, max=self.eps)
+            # adv_features = torch.clamp(features + delta, min=-1, max=1).detach()
             adv_features = (features + delta).detach()
 
         return adv_features

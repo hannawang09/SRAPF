@@ -1,7 +1,8 @@
---extra-index-url https://download.pytorch.org/whl/cu113
-torch==1.12.0+cu113
-torchaudio==0.12.0+cu113
+--extra-index-url https://download.pytorch.org/whl/cu117
+torch==2.0.0
+torchvision==0.15.1
+torchaudio==2.0.1
 torchmetrics==1.4.2
-torchvision==0.13.0+cu113
 tqdm==4.66.5
 numpy==1.26.4
+xformers==0.0.18

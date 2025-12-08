@@ -1,7 +1,118 @@
 import torch
 from torch import nn
+from torchvision import transforms
+import copy
+
 from utils.testing import test
 import templates
+import clip.clip as clip
+
+
+CLIP_MODEL_DIC ={
+    'vitb16': 'ViT-B/16'
+}
+
+DINOv2_MODEL_DIC ={
+    'vitb14': 'dinov2_vitb14_reg'
+}
+
+
+def get_model(args, logger, mode='train'):
+
+    logger.info(f"Loading model: {args.model_cfg} ......")
+
+    arch, model_name, _ = args.model_cfg.split('_')
+    if model_name == 'clip':
+        model, train_preprocess, test_preprocess = clip.load(CLIP_MODEL_DIC[arch], jit=False)
+        tokenizer = clip.tokenize
+    elif model_name == 'dinov2':
+        model = DinoVisionTransformer_v2(model_cfg=DINOv2_MODEL_DIC[arch])
+
+        train_preprocess = transforms.Compose([
+            transforms.RandomResizedCrop(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])
+        test_preprocess = transforms.Compose([
+            transforms.Resize(224),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])
+        tokenizer = None
+    else:
+        raise ValueError(f"Unknown model name: {model_name}")
+        
+    return model, train_preprocess, test_preprocess, tokenizer
+
+
+class DinoVisionTransformer_v2(nn.Module):
+    def __init__(self, model_cfg):
+        super(DinoVisionTransformer_v2, self).__init__()
+        dinov2_model = torch.hub.load('facebookresearch/dinov2', model_cfg)
+        self.transformer = copy.deepcopy(dinov2_model)
+        
+
+    def forward(self, x):
+        x = self.transformer(x)
+        return x
+    
+
+    def prepare_tokens_with_masks(self, x, cls_token, masks=None):
+        B, nc, w, h = x.shape
+        x = self.transformer.patch_embed(x)
+        if masks is not None:
+            x = torch.where(masks.unsqueeze(-1), self.transformer.mask_token.to(x.dtype).unsqueeze(0), x)
+
+        if cls_token.shape[0] == 1:
+            x = torch.cat((cls_token.expand(x.shape[0], -1, -1), x), dim=1)
+        else:
+            x = torch.cat((cls_token, x), dim=1)
+        x = x + self.transformer.interpolate_pos_encoding(x, w, h)
+
+        if self.transformer.register_tokens is not None:
+            x = torch.cat(
+                (
+                    x[:, :1],
+                    self.transformer.register_tokens.expand(x.shape[0], -1, -1),
+                    x[:, 1:],
+                ),
+                dim=1,
+            )
+
+        return x
+
+
+    def encode_clstoken(self, x, cls_token, masks=None):
+
+        x = self.prepare_tokens_with_masks(x, cls_token, masks)
+
+        for blk in self.transformer.blocks:
+            x = blk(x)
+
+        x_norm = self.transformer.norm(x)
+        return x_norm[:, 0]
+    
+    
+    def get_midfeatures(self, x, k=2):
+
+        x = self.prepare_tokens_with_masks(x, self.transformer.cls_token, masks=None)
+
+        for blk in self.transformer.blocks[:-k]:
+            x = blk(x)
+
+        return x
+    
+    def get_features(self, x, k=2):
+        
+        for blk in self.transformer.blocks[-k:]:
+            x = blk(x)
+        
+        x_norm = self.transformer.norm(x)
+        return x_norm[:, 0]
+
+
 
 
 class MyLinear(nn.Module):
@@ -57,8 +168,8 @@ def save_model_ckpt(args, best_records, model, classifier_head, optimizer, sched
     state['num_iter'] = num_iter
     state['clip'] = model.state_dict()
     state['head'] = classifier_head.state_dict()
-    state['optimizer'] = optimizer.state_dict()
-    state['scheduler'] = scheduler.state_dict()
+    # state['optimizer'] = optimizer.state_dict()
+    # state['scheduler'] = scheduler.state_dict()
     state['logit_scale'] = logit_scale
 
     torch.save(state, model_path)
@@ -86,20 +197,20 @@ def save_best_model(args, best_records, best_model, best_head, best_logit_scale,
     return model_path
 
 
-def load_model(args, logger, model, classifier, test_dataloader=None):
+def load_model(args, logger, model, classifier, test_dataloader=None, is_encoder=True):
 
     logger.info(f'Loading model from: {args.model_path}')
     ckpt = torch.load(args.model_path)
 
-    #----- load normal model
     model.load_state_dict(ckpt['clip'])
     classifier.load_state_dict(ckpt['head'])
 
     logger.info(f'ckpt[test_acc]: {ckpt["test_acc"]}')
 
     if test_dataloader is not None:
-        model_test_acc = test(dataloader=test_dataloader, model=model, classifier=classifier,
-                               test_label_map=[i for i in range(1000)], device=args.device)
+        model_test_acc = test(args, dataloader=test_dataloader, model=model, classifier=classifier,
+                               test_label_map=[i for i in range(1000)], device=args.device,
+                               is_encoder=is_encoder)
         logger.info(f"Loaded Model Test Acc: {round(model_test_acc, 3)}")
 
 

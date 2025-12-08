@@ -359,7 +359,11 @@ class DatasetWrapper(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         item = self.data_source[idx]
-        img = self.transform(default_loader(item['impath']))
+        if self.transform is None:
+            imgs = torch.load(item['impath'])
+            img = imgs[item['index']]
+        else:
+            img = self.transform(default_loader(item['impath']))
 
         return img, item['label']
 
@@ -569,9 +573,9 @@ def build_imagenet_few_shot_dataset(dataset_name,
         lines.extend(line)
 
     if w_retrival:
-        retrival_index_file = os.path.join(few_shot_dir, f"T2T500.txt")
+        retrival_index_file = os.path.join(few_shot_dir, f"retrieved/T2T500.txt")
         args.logger.info(f"Loading retrieved data from {retrival_index_file}.")
-        retrieved_root= args.retrieved_root
+        retrieved_root = args.retrieved_root
         with open(os.path.join(retrival_index_file), 'r') as f:
             line = f.readlines()
             line = [os.path.join(retrieved_root, l) for l in line]
@@ -615,7 +619,7 @@ def build_imagenet_few_shot_dataset_demo(dataset_name,
         lines.extend(line)
 
     if w_retrival:
-        retrival_index_file = os.path.join(few_shot_dir, f"T2T500.txt")
+        retrival_index_file = os.path.join(few_shot_dir, f"retrieved/T2T500.txt")
         print(f"Loading retrieved data from {retrival_index_file}.")
         retrieved_root  = root.replace("ImageNet", "retrieved")
         with open(os.path.join(retrival_index_file), 'r') as f:
@@ -648,3 +652,58 @@ def build_imagenet_dataset(dataset_name, split, preprocess, root):
     split_set = getattr(dataset, split)
     testset = DatasetWrapper(split_set, label_map, transform=preprocess, dataset_name=dataset.dataset_name)
     return testset, openai_imagenet_classes
+
+
+def build_validation_set(val_type,
+                         args,
+                         seed,
+                         preprocess,
+                         split_dir='data_resource/retrieved'):
+
+
+    val_index_file = os.path.join(split_dir, f"val_seed{seed}_{val_type}.txt")
+
+    args.logger.info(f"Loading OOD validation data from {val_index_file}.")
+
+    label_map = list(range(1000))
+    lines = []
+    with open(val_index_file, 'r') as f:
+        line = f.readlines()
+        root = args.retrieved_root
+        line = [os.path.join(root, l) for l in line]
+        lines.extend(line)
+
+    val_dataset = []
+    for line in lines:
+        impath, label, _ = line.strip('\n').split(' ')
+        val_dataset.append({'impath': impath, 'label': int(label)})
+    val_dataset = DatasetWrapper(val_dataset, label_map, transform=preprocess, dataset_name='Retrieved_Validation')
+        
+    return val_dataset
+
+
+def build_validation_set_demo(val_type,
+                              root,
+                              seed,
+                              preprocess,
+                              split_dir='data_resource/retrieved'):
+
+
+    val_index_file = os.path.join(split_dir, f"val_seed{seed}_{val_type}.txt")
+
+    print(f"Loading OOD validation data from {val_index_file}.")
+
+    label_map = list(range(1000))
+    lines = []
+    with open(val_index_file, 'r') as f:
+        line = f.readlines()
+        line = [os.path.join(root, l) for l in line]
+        lines.extend(line)
+
+    val_dataset = []
+    for line in lines:
+        impath, label, _ = line.strip('\n').split(' ')
+        val_dataset.append({'impath': impath, 'label': int(label)})
+    val_dataset = DatasetWrapper(val_dataset, label_map, transform=preprocess, dataset_name='Retrieved_Validation')
+        
+    return val_dataset

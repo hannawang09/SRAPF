@@ -31,7 +31,7 @@ def set_logger(args):
         logger.info(f'{arg} = {getattr(args, arg)}')
 
     loss_logger = open(f'{output_dir}/loss.csv', 'w')
-    loss_logger.write(f'Epoch,Iter,Train_loss,Val_loss,Val_acc,Test_acc\n')
+    loss_logger.write(f'Epoch,Iter,Train_acc,Train_loss,Val_loss,Val_acc,Test_acc,Acc_v2,Acc_s,Acc_a,Acc_r,OOD_Avg\n')
 
     # device
     args.device = "cuda" if torch.cuda.is_available() else "cpu"

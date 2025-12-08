@@ -15,7 +15,7 @@ def logit_adaption(pred_logit, label_map):
     return pred_logit
 
 
-def test(dataloader, model, classifier, test_label_map=None, device='cuda'):
+def test(args, dataloader, model, classifier, test_label_map=None, device='cuda', is_encoder=True):
         model.eval()
         classifier.eval()
         with torch.no_grad():
@@ -25,8 +25,15 @@ def test(dataloader, model, classifier, test_label_map=None, device='cuda'):
                 inputs = inputs.to(device)
                 targets = targets.to(device)
 
-                image_features = model.encode_image(inputs)
-                image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+                if args.pre_extracted:
+                    image_features = inputs
+                else:
+                    if is_encoder:
+                        image_features = model.encode_image(inputs)
+                        image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+                    else:
+                        image_features = model(inputs)
+                     
                 outputs = classifier(image_features)
                 outputs = logit_adaption(outputs, test_label_map)
 
@@ -42,11 +49,13 @@ def test(dataloader, model, classifier, test_label_map=None, device='cuda'):
         model.train()
         classifier.train()
         
-        return test_acc * 100
+        return test_acc*100
 
 
-def ood_test(args, model, classifier, test_preprocess, logger):
+def ood_test(args, model, classifier, test_preprocess, logger, is_encoder):
 
+        args.pre_extracted = False
+        
         # OOD testsets
         imagenet_a_test, _ = datasets.build_imagenet_dataset('imagenet_a', 'test', test_preprocess, root=args.root)
         imagenet_r_test, _ = datasets.build_imagenet_dataset('imagenet_r', 'test', test_preprocess, root=args.root)
@@ -55,7 +64,7 @@ def ood_test(args, model, classifier, test_preprocess, logger):
 
         acc_list = []
         for test_dataset in [imagenetv2_test, imagenet_sketch_test, imagenet_a_test, imagenet_r_test]:
-
+            
             dataset_name = test_dataset.dataset_name
             test_dataloader = torch.utils.data.DataLoader(
                 dataset=test_dataset,
@@ -63,8 +72,8 @@ def ood_test(args, model, classifier, test_preprocess, logger):
                 shuffle=False,
                 num_workers=4)
             test_label_map = test_dataset.label_map
-
-            test_acc = test(test_dataloader, model, classifier, test_label_map)
+            
+            test_acc = test(args, test_dataloader, model, classifier, test_label_map, is_encoder=is_encoder)
 
             acc_list.append(test_acc)
             logger.info(f'{dataset_name}, Test Acc: {round(test_acc, 3)}')

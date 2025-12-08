@@ -1,5 +1,5 @@
 import torch
-from utils.models import MyLinear, load_model, save_best_model, get_zeroshot_weights
+from utils.models import MyLinear, load_model, save_best_model, get_zeroshot_weights, get_model
 import time
 from utils.parser import parse_args
 from utils.logger import set_logger
@@ -9,7 +9,7 @@ import torch.nn as nn
 from utils.training import set_training_seed, run_zeroshot, train_ce, train_ce_ap
 from utils.optimizer import set_optimizer, set_params
 from utils.scheduler import build_lr_scheduler
-import clip.clip as clip
+from utils.features import pre_extract_feature, get_dataloader_preextracted
 import datasets
 
 
@@ -20,19 +20,33 @@ def run_stage1_finetuning(args, logger, model, classifier, train_preprocess, tes
                                                                  root=args.root, num_shots=args.num_shots, 
                                                                  w_retrival=True if args.data_source == 'fewshot+retrieved' else False)
 
-
     train_dataloader = torch.utils.data.DataLoader(
         dataset=imagenet_train,
         batch_size=args.bsz,
         shuffle=True,
         num_workers=8,
-        pin_memory=True)
-    val_dataloader = torch.utils.data.DataLoader(
-        dataset=imagenet_test,
-        batch_size=64,
-        shuffle=False,
-        num_workers=8,
         pin_memory=False)
+    if args.val_type == 'fewshot+retrieved':
+        val_dataloader_ID = torch.utils.data.DataLoader(
+            dataset=valset_ID,
+            batch_size=64,
+            shuffle=False,
+            num_workers=8,
+            pin_memory=False)
+        val_dataloader_RT = torch.utils.data.DataLoader(
+            dataset=valset_RT,
+            batch_size=64,
+            shuffle=False,
+            num_workers=8,
+            pin_memory=False)
+        val_dataloader = (val_dataloader_ID, val_dataloader_RT)
+    else:
+        val_dataloader = torch.utils.data.DataLoader(
+            dataset=valset,
+            batch_size=64,
+            shuffle=False,
+            num_workers=8,
+            pin_memory=False)
     test_dataloader = torch.utils.data.DataLoader(
         dataset=imagenet_test,
         batch_size=64,
@@ -40,7 +54,11 @@ def run_stage1_finetuning(args, logger, model, classifier, train_preprocess, tes
         num_workers=8,
         pin_memory=False)
 
-    test_loader_copy = copy.deepcopy(test_dataloader)
+    if args.pre_extracted:
+        logger.info(f'Use pre-extracted features.')
+        dataloader_dict = {'train_dataloader': train_dataloader, 'test_dataloader': test_dataloader, 'val_dataloader': val_dataloader}
+        train_fea_path, val_fea_path, test_fea_path = pre_extract_feature(args, logger, model, dataloader_dict, is_encoder)
+        train_dataloader, val_dataloader, test_dataloader = get_dataloader_preextracted(args, logger, train_fea_path, val_fea_path, test_fea_path, args.device)
 
     loss = nn.CrossEntropyLoss()
     params, logit_scale = set_params(args, model, classifier, logger) # depend on method
@@ -60,12 +78,13 @@ def run_stage1_finetuning(args, logger, model, classifier, train_preprocess, tes
     stage1_method = args.method
 
     if args.model_path:
-        load_model(args, logger, model, classifier, test_dataloader)
+        load_model(args, logger, model, classifier, test_dataloader, is_encoder)
 
     # check zeroshot acc
     if args.check_zeroshot or args.method == 'zeroshot':
         logger.info(f"Check Zero-shot Acc ......")
-        zs_test_acc = run_zeroshot(args, val_dataloader, model, logger, classifier)
+        zs_test_acc = run_zeroshot(args, val_dataloader, model, logger, classifier, is_encoder)
+        acc_list = ood_test(args, model, classifier, test_preprocess, logger, is_encoder)
 
     if args.method == 'zeroshot':
         result_summary = f'{args.dataset},{stage1_method},{args.data_source},{args.cls_init},{args.num_shots},{args.data_seed},{round(zs_test_acc,3)}'
@@ -80,13 +99,20 @@ def run_stage1_finetuning(args, logger, model, classifier, train_preprocess, tes
     if args.method == 'finetune':
         if args.add_ap_stage1:
             best_model, best_head, \
-                best_records, best_logit_scale = train_ce_ap(args, logger, loss_logger, model, classifier,
-                                                             train_dataloader, val_dataloader, eps=args.eps_stage1)
+                best_records, best_logit_scale = train_ce_ap(args, logger, loss_logger, model, classifier, 
+                                                             train_dataloader, val_dataloader, eps=args.eps_stage1,
+                                                             test_preprocess=test_preprocess, is_encoder=is_encoder)
         else:
             best_model, best_head, \
                 best_records, best_logit_scale = train_ce(args, logger, loss_logger, model, classifier, 
-                                                          train_dataloader, val_dataloader)
-    
+                                                          train_dataloader, val_dataloader, test_preprocess,
+                                                          is_encoder)
+    elif args.method == 'lp':
+        best_model, best_head, \
+            best_records, best_logit_scale = train_ce(args, logger, loss_logger, model, classifier, 
+                                                      train_dataloader, val_dataloader, test_preprocess,
+                                                      is_encoder)
+        
     else:
         raise NotImplementedError(f"Method {args.method} not implemented.")
 
@@ -96,8 +122,8 @@ def run_stage1_finetuning(args, logger, model, classifier, train_preprocess, tes
     logger.info(f"best_logit_scale: {round(best_logit_scale.item(), 8)}")
 
     # test the best model after finetuning
-    test_acc = test(dataloader=test_dataloader, model=best_model, classifier=best_head, 
-                    test_label_map=[i for i in range(1000)], device=args.device)
+    test_acc = test(args, dataloader=test_dataloader, model=best_model, classifier=best_head, 
+                    test_label_map=[i for i in range(1000)], device=args.device, is_encoder=is_encoder)
     logger.info(f"+++++ Stage 1 Finetuning Test Acc: {round(test_acc, 3)}")
 
     #----------- save stage 1 best model
@@ -106,7 +132,7 @@ def run_stage1_finetuning(args, logger, model, classifier, train_preprocess, tes
 
     #----------- Test ImageNet OOD performance
     logger.info(f"+++++ Test Stage 1 ImageNet OOD ......")
-    acc_list = ood_test(args, best_model, best_head, test_preprocess, logger)
+    acc_list = ood_test(args, best_model, best_head, test_preprocess, logger, is_encoder)
 
     return test_acc, best_model_path
 
@@ -125,18 +151,35 @@ def run_stage2_FSFT(model, classifier, stage1_best_model_path, train_preprocess)
     imagenet_train, _ = datasets.build_imagenet_few_shot_dataset('imagenet', args, args.data_seed, train_preprocess, 
                                                                  root=args.root, num_shots=args.num_shots, 
                                                                  w_retrival=True if args.data_source == 'fewshot+retrieved' else False)
+
+
     train_dataloader = torch.utils.data.DataLoader(
         dataset=imagenet_train,
         batch_size=args.bsz,
         shuffle=True,
         num_workers=8,
-        pin_memory=True)
-    val_dataloader = torch.utils.data.DataLoader(
-        dataset=imagenet_test,
-        batch_size=64,
-        shuffle=False,
-        num_workers=8,
         pin_memory=False)
+    if args.val_type == 'fewshot+retrieved':
+        val_dataloader_ID = torch.utils.data.DataLoader(
+            dataset=valset_ID,
+            batch_size=64,
+            shuffle=False,
+            num_workers=8,
+            pin_memory=False)
+        val_dataloader_RT = torch.utils.data.DataLoader(
+            dataset=valset_RT,
+            batch_size=64,
+            shuffle=False,
+            num_workers=8,
+            pin_memory=False)
+        val_dataloader = (val_dataloader_ID, val_dataloader_RT)
+    else:
+        val_dataloader = torch.utils.data.DataLoader(
+            dataset=valset,
+            batch_size=64,
+            shuffle=False,
+            num_workers=8,
+            pin_memory=False)
     test_dataloader = torch.utils.data.DataLoader(
         dataset=imagenet_test,
         batch_size=64,
@@ -144,7 +187,7 @@ def run_stage2_FSFT(model, classifier, stage1_best_model_path, train_preprocess)
         num_workers=8,
         pin_memory=False)
 
-    load_model(args, logger, model, classifier, test_dataloader)
+    load_model(args, logger, model, classifier, test_dataloader, is_encoder=is_encoder)
 
     # Imporatnt! Need to reset the params, optimizer, scheduler, loss, logit_scale
     loss = nn.CrossEntropyLoss()
@@ -166,16 +209,18 @@ def run_stage2_FSFT(model, classifier, stage1_best_model_path, train_preprocess)
     #---------- Training
     if args.add_ap_stage2:
         best_model, best_head, \
-            best_records, best_logit_scale = train_ce_ap(args, logger, loss_logger, model, classifier,
-                                                         train_dataloader, val_dataloader, eps=args.eps_stage2)
+            best_records, best_logit_scale = train_ce_ap(args, logger, loss_logger, model, classifier, 
+                                                         train_dataloader, val_dataloader, eps=args.eps_stage2,
+                                                         test_preprocess=test_preprocess, is_encoder=is_encoder)
     else:
         best_model, best_head, \
-            best_records, best_logit_scale = train_ce(args, logger, loss_logger, model, classifier,
-                                                      train_dataloader, val_dataloader)
+            best_records, best_logit_scale = train_ce(args, logger, loss_logger, model, classifier, 
+                                                      train_dataloader, val_dataloader, test_preprocess,
+                                                      is_encoder)
 
     # test the best model after FSFT
-    test_acc = test(dataloader=test_dataloader, model=best_model, classifier=best_head, 
-                    test_label_map=[i for i in range(1000)], device=args.device)
+    test_acc = test(args, dataloader=test_dataloader, model=best_model, classifier=best_head, 
+                    test_label_map=[i for i in range(1000)], device=args.device, is_encoder=is_encoder)
     logger.info(f"+++++ Stage 2 FSFT Test Acc: {round(test_acc, 3)}")
 
     #----------- save stage 2 best model
@@ -185,8 +230,8 @@ def run_stage2_FSFT(model, classifier, stage1_best_model_path, train_preprocess)
 
 
     #----------- Test ImageNet OOD performance
-    logger.info(f"+++++ Test Stage 1 ImageNet OOD ......")
-    acc_list = ood_test(args, best_model, best_head, test_preprocess, logger)
+    logger.info(f"+++++ Test Stage 2 ImageNet OOD ......")
+    acc_list = ood_test(args, best_model, best_head, test_preprocess, logger, is_encoder)
 
 
     return test_acc, best_model_path
@@ -202,18 +247,29 @@ if __name__ == '__main__':
     set_training_seed(args)
 
     # load model
-    model, train_preprocess, test_preprocess = clip.load('ViT-B/16', jit=False)
-    tokenizer = clip.tokenize
+    model, train_preprocess, test_preprocess, tokenizer = get_model(args, logger)
+    is_encoder = True if 'clip' in args.model_cfg else False # determine the model is clip or dinov2
 
-
-    # Prepare test dataset
+    # Prepare dataset
     # ID testset
     imagenet_test, text_name = datasets.build_imagenet_dataset('imagenet', 'test', test_preprocess, root=args.root)
-
+    # validation set
+    if args.val_type == 'testset':
+        valset = imagenet_test
+    elif args.val_type == 'fewshot':
+        valset, _ = datasets.build_imagenet_few_shot_dataset('imagenet', args, args.data_seed, test_preprocess, 
+                                                             root=args.root, num_shots=args.num_shots, w_retrival=False)
+    elif args.val_type == 'retrieved':
+        valset = datasets.build_validation_set(args.val_type, args, args.data_seed, test_preprocess)
+    elif args.val_type == 'fewshot+retrieved':
+        valset_ID, _ = datasets.build_imagenet_few_shot_dataset('imagenet', args, args.data_seed, test_preprocess, 
+                                                                root=args.root, num_shots=args.num_shots, w_retrival=False)
+        valset_RT = datasets.build_validation_set('retrieved', args, args.data_seed, test_preprocess)
+    
     # set classifier head
     num_classes = 1000
-    num_features = 512
-    logit_scale = model.logit_scale
+    num_features = 512 if 'clip' in args.model_cfg else 768 # 512 for clip model, 768 for dinov2 model.
+    logit_scale = model.logit_scale if 'clip' in args.model_cfg else 0 # use the pretrained logit_scale (4.60517) for clip model; do not use logit scale for dinov2
 
     if args.cls_init == 'openai':
         with torch.no_grad():
@@ -227,6 +283,13 @@ if __name__ == '__main__':
     elif args.cls_init == 'random':
         logger.info(f'Initialized classifier head with random weights.')
         classifier = MyLinear(input_dim=num_features, num_classes=num_classes, bias=False)
+    
+    elif args.cls_init == 'lp': # load the classifier weights using the classifier after probing
+        assert args.cls_path is not None
+        classifier = MyLinear(input_dim=num_features, num_classes=num_classes, bias=False)
+        checkpoint = torch.load(args.cls_path)
+        classifier.load_state_dict(checkpoint['head'])
+        logger.info(f'Loaded classifier weights from {args.cls_path}')
 
     model.to(args.device)
     classifier.to(args.device)

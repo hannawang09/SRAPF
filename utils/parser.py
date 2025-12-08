@@ -1,6 +1,6 @@
 import argparse
 import yaml
-
+import os
 
 def parse_args():
 
@@ -12,6 +12,7 @@ def parse_args():
     parser.add_argument('--prefix', type=str, default=None, help='Prefix for Log file Name.')
 
     # model
+    parser.add_argument('--model_cfg', default='vitb16_clip_openai', type=str, help='Model for finetuning.')
     parser.add_argument('--model_path', default=None, type=str, help='Model path to start training from.')
    
     # dataset
@@ -24,10 +25,12 @@ def parse_args():
                         help='training data source.')
     parser.add_argument('--num_shots', type=int, default=16, help='number of shots for fewshot data')
     parser.add_argument('--data_seed', type=int, default=1, help='Random seeds for different splits.')
+    parser.add_argument('--pre_extracted', default=False, action='store_true', help='use pre-extracted features.')
+    parser.add_argument('--recal_fea', default=False, action='store_true', help='re-run feature extraction.')
 
 
     # training
-    parser.add_argument('--method', type=str, default='finetune', choices=['zeroshot', 'finetune'],
+    parser.add_argument('--method', type=str, default='finetune', choices=['zeroshot', 'finetune', 'lp'],
                         help='Method for training.')
     parser.add_argument('--training_seed', type=int, default=1, help='Random seeds for training.')
     parser.add_argument('--ft_topk_blks', type=int, default=-1, help='finetune top-k blocks, -1 means all blocks.')
@@ -35,8 +38,9 @@ def parse_args():
     parser.add_argument('--eps_stage1', type=float, default=0, help='perturbation epsilon.')
     parser.add_argument('--add_ap_stage2', default=False, action='store_true', help='add adversarial perturbation to the cls token.')
     parser.add_argument('--eps_stage2', type=float, default=0, help='perturbation epsilon.')
-    parser.add_argument('--cls_init', type=str, default='openai', choices=['random', 'openai'],
+    parser.add_argument('--cls_init', type=str, default='openai', choices=['random', 'openai', 'lp'],
                         help='Initialize the classifier head in different ways.')
+    parser.add_argument('--cls_path', default=None, type=str, help='classifier path to start training from.')
 
     parser.add_argument('--skip_stage1', default=False, action='store_true', help='Set to skip stage 1 training')
     parser.add_argument('--skip_stage2', default=False, action='store_true', help='Set to skip stage 2 probing')
@@ -46,6 +50,10 @@ def parse_args():
     parser.add_argument('--early_stop', action='store_true', help='use val set for early stopping.')
     parser.add_argument('--epochs', type=int, default=0, help='number of epochs to train the model')
     parser.add_argument('--stop_epochs', type=int, default=200, help='number of epochs to stop the training of the model')
+    
+    # validation
+    parser.add_argument('--val_type', type=str, default='testset', choices=['testset', 'fewshot', 'retrieved', 'fewshot+retrieved'],
+                        help='Validation type to use for training.')
 
     # optimization
     parser.add_argument('--num_workers', type=int, default=8, help='Num of workers.')
@@ -76,7 +84,10 @@ def parse_args():
         args.check_zeroshot = True
         args.skip_stage2 = True
 
-
+    if args.pre_extracted:
+        if not os.path.exists('datasets/pre_extracted/'):
+            os.makedirs('datasets/pre_extracted/')
+        
     # adjust folder
     args.folder = f'{args.folder}/output_{args.dataset}'
 

@@ -247,7 +247,7 @@ class VisualTransformer(nn.Module):
 
     def kblocks_forward(self, x: torch.Tensor, k=2):
         """
-        Forward pass through the first k blocks of the transformer.
+        Forward pass through the first len(blocks)-k blocks of the transformer.
         """
         x = self.conv1(x)  # shape = [*, width, grid, grid]
         x = x.reshape(x.shape[0], x.shape[1], -1)  # shape = [*, width, grid ** 2]
@@ -264,21 +264,7 @@ class VisualTransformer(nn.Module):
 
         return x
 
-    def restblocks_forward(self, x: torch.Tensor, k=2):
-        """
-        Forward pass through the last k blocks of the transformer.
-        """
-        for blk in self.transformer.resblocks[-k:]:
-            x = blk(x)
-
-        x = x.permute(1, 0, 2)  # LND -> NLD
-        x = self.ln_post(x[:, 0, :])
-
-        if self.proj is not None:
-            x = x @ self.proj
-
-        return x
-
+    
     def forward_token(self, x: torch.Tensor, cls_token: torch.Tensor):
         x = self.conv1(x)  # shape = [*, width, grid, grid]
         x = x.reshape(x.shape[0], x.shape[1], -1)  # shape = [*, width, grid ** 2]
@@ -291,6 +277,21 @@ class VisualTransformer(nn.Module):
         x = self.transformer(x)
         x = x.permute(1, 0, 2)  # LND -> NLD
 
+        x = self.ln_post(x[:, 0, :])
+
+        if self.proj is not None:
+            x = x @ self.proj
+
+        return x
+
+    def restblocks_forward(self, x: torch.Tensor, k=2):
+        """
+        Forward pass through the last k blocks of the transformer.
+        """
+        for blk in self.transformer.resblocks[-k:]:
+            x = blk(x)
+
+        x = x.permute(1, 0, 2)  # LND -> NLD
         x = self.ln_post(x[:, 0, :])
 
         if self.proj is not None:

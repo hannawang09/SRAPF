@@ -2,9 +2,9 @@ methods=("finetune")
 
 data_sources=("fewshot+retrieved")
 
-folder="SRAPF"
+folder="VEST"
 
-cls_inits=("openai") # OpenAI 80 prompts average
+model_cfg="vitb16_clip_openai" # vitb16_clip_openai or vitb14_dinov2_reg
 
 
 # shot_values=(4 8 16)
@@ -12,14 +12,40 @@ shot_values=(16)
 
 
 batch_size=64
-epochs=10
-lr_backbone=1e-6
-lr_classifier=1e-3
-wd=1e-2
 warmup_lr=1e-8
 warmup_iter=18
+eps_stage2=0.007
 
 
+# update learning rate based on the first item of the model_cfg
+first_item=$(echo $model_cfg | cut -d'_' -f1)
+second_item=$(echo $model_cfg | cut -d'_' -f2)
+echo "Model: $model_cfg"
+
+# clip
+if [ "$second_item" = "clip" ]; then
+    epochs=10
+    lr_backbone=1e-6
+    lr_classifier=1e-3
+    wd=1e-2
+    cls_inits=("openai") # OpenAI 80 prompts average
+
+# DINOv2
+elif [ "$second_item" = "dinov2" ]; then
+    epochs=10
+    lr_backbone=1e-6
+    lr_classifier=1e-4
+    wd=1e-2
+    cls_inits=("random") # randomly initialize the classifier
+
+else
+    echo "Model not found"
+    exit 1
+fi
+
+
+
+val_type="fewshot+retrieved"  # 'testset', 'fewshot', 'retrieved', 'fewshot+retrieved'
 log_mode="both"
 
 
@@ -43,11 +69,10 @@ else
     folder="${folder}_all"
 fi
 
-output_folder="output/$folder"
+output_folder="output_$second_item/$folder"
 if [ ! -d "$output_folder" ]; then
     mkdir -p "$output_folder"
 fi
-
 
 # Loop through all combinations and run the script
 for dataset in "${datasets[@]}"; do
@@ -59,15 +84,18 @@ for dataset in "${datasets[@]}"; do
                         echo "Running: $dataset $method $data_source $init $shots $seed $retrieval_split"
 
                         # Run the script and capture the output
-                        output=$(python main.py --dataset "$dataset" --method "$method" --data_source "$data_source"  \
-                        --cls_init "$init" --num_shots "$shots" --data_seed "$seed" --epochs "$epochs" --bsz "$batch_size" \
-                        --log_mode "$log_mode" --lr_backbone "$lr_backbone" --lr_classifier "$lr_classifier" --wd "$wd" \
-                        --warmup_lr "$warmup_lr" --warmup_iter "$warmup_iter" --folder "$output_folder" --early_stop \
-                        --ft_topk_blks "$ft_topk_blks" --add_ap_stage2 --eps_stage2 0.01 \
+                        output=$(python main.py --dataset "$dataset" --method "$method" --model_cfg "$model_cfg" \
+                        --data_source "$data_source" --cls_init "$init" --num_shots "$shots" --data_seed "$seed" \
+                        --epochs "$epochs" --bsz "$batch_size" --log_mode "$log_mode" \
+                        --lr_backbone "$lr_backbone" --lr_classifier "$lr_classifier" --wd "$wd" \
+                        --warmup_lr "$warmup_lr" --warmup_iter "$warmup_iter" --folder "$output_folder" \
+                        --ft_topk_blks "$ft_topk_blks" --add_ap_stage2 --eps_stage2 "$eps_stage2" \
+                        --val_type "$val_type" --early_stop --save_ckpt --save_freq 1
                         )
 
                         # Print the output to the console
                         echo "$output"
+
 
                     done
                 done

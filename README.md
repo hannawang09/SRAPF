@@ -1,29 +1,30 @@
 <div align='center'>
-<h1>Robust Few-Shot Vision-Language Model Adaptation </h1>
+<h1>Enabling Validation for Robust Few-Shot Recognition</h1>
 	
-<a href="https://hannawang09.github.io/" target="_blank">Hanxin Wang</a><sup>1,†</sup>,
-<a href="https://tian1327.github.io/" target="_blank">Tian Liu</a><sup>2,†</sup>,
-<a href="https://aimerykong.github.io/" target="_blank">Shu Kong</a><sup>1,3,*</sup>
+<a href="https://hannawang09.github.io/" target="_blank">Hanxin Wang</a><sup>1,\*</sup>,
+<a href="https://tian1327.github.io/" target="_blank">Tian Liu</a><sup>2,\*</sup>,
+<a href="https://aimerykong.github.io/" target="_blank">Shu Kong</a><sup>1,3</sup>
 
 <span><sup>1</sup>University of Macau,</span>
 <span><sup>2</sup>Texas A&M University,</span>
 <span><sup>3</sup>Institute of Collaborative Innovation</span>
 
- <sup>†</sup>Equal contribution, <sup>*</sup>Corresponding author
+<sup>*</sup>Equal contribution
  
-<a href="https://arxiv.org/abs/2506.04713"><img src='https://img.shields.io/badge/arXiv-SRAPF-red' alt='Paper PDF'></a>
-<a href="https://hannawang09.github.io/projects/srapf/"><img src='https://img.shields.io/badge/Project_Page-SRAPF-green' alt='Project Page'></a>
+<a href="https://arxiv.org/abs/2506.04713"><img src='https://img.shields.io/badge/arXiv-VEST-red' alt='Paper PDF'></a>
+<a href="https://hannawang09.github.io/projects/vest/"><img src='https://img.shields.io/badge/Project_Page-VEST-green' alt='Project Page'></a>
 </div>
 
 
+Few-Shot Recognition (FSR) tackles classification tasks by training with minimal task-specific labeled data. Prevailing methods adapt or finetune a pretrained Vision-Language Model (VLM) generalizes decently well to the task-specific in-distribution (ID) test data but struggles with out-of-distribution (OOD) test data.
 
-Pretrained Vision-Language Models (VLMs) achieve strong performance on downstream tasks when adapted with just a few labeled examples. However, the few-shot adapted models inevitably encounter out-of-distribution (OOD) test data that deviates from the in-distribution (ID) task-specific training data.
+We introduce a novel validation strategy that harmonizes <em>performance gain</em> and <em>degradation</em> on the few-shot ID data and the retrieved data, respectively. Our validation enables parameter selection for partial finetuning and checkpoint selection, mitigating overfitting and improving test-data generalization. We unify this strategy with robust learning techniques into a cohesive framework: <b>V</b>alidation-<b>E</b>nabled <b>S</b>tage-wise <b>T</b>uning (<b>VEST</b>).
 
-We propose **SRAPF**, **S**tage-wise **R**etrieval **A**ugmentation-based **A**dversarial **P**artial **F**inetuning, a robust few-shot VLM adaptation method. It consists of two finetuning stages: (1) partial finetuning of the visual encoder using both ID and retrieved data, followed by (2) adversarial partial finetuning using few-shot ID data. 
 
 <div align='center'>
-    <img src='asset/overview.jpg' alt='overview' width=50%>
+    <img src='asset/overview.png' alt='overview' width=50%>
 </div>
+
 
 ## Environment Configuration
 
@@ -31,8 +32,8 @@ You can run the command below to set up the environment in an easy way:
 
 ```
 # Create a Virtual Environment
-conda create -n srapf python=3.10
-conda activate srapf
+conda create -n vest python=3.10
+conda activate vest
 # Install Dependencies
 pip install -r requirements.txt
 ```
@@ -45,32 +46,38 @@ Please follow the instructions in [DATASET.md](DATASETS.md) to prepare the datas
 
 
 
-
-## Training
+## Training and Testing
 1. Update your data path and retrieved data path in `config.yml`.
-2. Runing script using the following command:
-```
-# bash scripts/run_dataset_seed_*.sh [dataset] [data_seed] [ft_top_X_block]
-# In our experiments, we adopt PFT on the top-4 blocks as the default setting.
+2. Runing script 
+    - For **Validation-Enabled Stage-wise Tuning (VEST)**, use the following command:
+    ```
+    bash scripts/run_dataset_seed_VEST.sh imagenet [data_seed] [ft_top_X_block]
+    
+    # In our experiments, we PFT top-4 blocks on CLIP and top-1 blocks on DINOv2.
+    ```
+    - For **Partial Finetuning (PFT)**, use the following command:
+    ```
+    bash scripts/run_dataset_seed_PFT.sh imagenet [data_seed] [ft_top_X_block]
+    ```
+    - For **Partial Finetuning with Adversarial Perturbation (PFT w/ AP)**, use the following command:
+    ```
+    bash scripts/run_dataset_seed_PFT_w_AP.sh imagenet [data_seed] [ft_top_X_block]
+    
+    # In our experiments, we set eps to 3e-2 when partially finetuning the pretrained model and 7e-3 in stage-2 of VEST.
+    ```
+    
+    > Note: The default model is CLIP. To finetune the DINOv2 model instead, please update the `model_cfg` in scripts.
 
-bash scripts/run_dataset_seed_SRAPF.sh imagenet 1 4
-
-```
-We also provide the scripts for **Partial Finetuning** (`run_dataset_seed_PFT.sh`) and **Partial Finetuning with Adversarial Perturbation** (`run_dataset_seed_PFT_w_AP.sh`).
 
 
 
 
-
-## Demo
-
+## Demos
 We provide demos of model training and evaluation. 
 
 - See `PFT_demo.ipynb` for the details of **Partial Finetuning**.
-- See `PFT_w_AP_demo.ipynb` for the details of **Partial Finetuning with Adversarial Perturbation**.
-- See `SRAPF_demo.ipynb` for the details of **Stage-wise Retrieval Augmentation-based Adversarial Partial Finetuning**.
-
-
+- See `VEST_demo.ipynb` for the details of **Validation-Enabled Stage-wise Tuning**.
+- See `VEST_dinov2_demo.ipynb` for the details of **Validation-Enabled Stage-wise Tuning** on vision foundation model DINOv2.
 
 
 
@@ -78,7 +85,6 @@ We provide demos of model training and evaluation.
 <div align='center'>
     <img src='asset/performance.png' alt='performance' width=50%>
 </div>
-
 
 
 
@@ -95,8 +101,8 @@ We also thank [torchattacks](https://github.com/Harry24k/adversarial-attacks-pyt
 If you find our project useful, please consider citing:
 
 ```bibtex
-@article{wang2025robust,
-    title={Robust Few-Shot Vision-Language Model Adaptation}, 
+@article{wang2025enabling,
+    title={Enabling Validation for Robust Few-Shot Recognition}, 
     author={Wang, Hanxin and Liu, Tian and Kong, Shu},
     journal={arXiv preprint arXiv:2506.04713},
     year={2025}
@@ -109,4 +115,3 @@ If you find our project useful, please consider citing:
   year={2025}
 }
 ```
-

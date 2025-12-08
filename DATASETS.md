@@ -152,10 +152,12 @@ If you had downloaded the ImageNet dataset and its variants before, you can crea
 
 
 # How to prepare the few-shot dataset
-We have already prepared the `fewshot{4/8/16}_seed{1/2/3}.txt` files for ImageNet dataset in `SRAPF/data_resource/imagenet/` folder.
+We have already prepared the `fewshot{4/8/16}_seed{1/2/3}.txt` files for ImageNet dataset in `VEST/data_resource/imagenet/` folder.
 
 
 
 # How to prepare the retrieval dataset
 
-For retrieval augmentation, we follow SWAT's approach. Please refer to [SWAT/retrieval/RETRIEVAL.md](https://github.com/tian1327/SWAT/blob/master/retrieval/RETRIEVAL.md) for instructions on how to set up the retrieved datasets. The annotation file of retrieved dataset (top-500 selected) is available at: `SRAPF/data_resource/T2T500.txt` .
+For retrieval augmentation, we follow SWAT's approach. Please refer to [SWAT/retrieval/RETRIEVAL.md](https://github.com/tian1327/SWAT/blob/master/retrieval/RETRIEVAL.md) for instructions on how to set up the retrieved datasets. 
+
+The annotation file of retrieved *training set* (top-500 selected) is available at: `VEST/data_resource/retrieved/T2T500.txt`. The annotation files of retrieved *validation set* (randomly selected) using 3 different seeds are available at: `VEST/data_resource/retrieved/val_seed{1/2/3}_retrieved.txt`. 
